@@ -371,8 +371,9 @@ class SolrConnection:
     def close(self):
         self.conn.close()
 
-    def query(self, q, fields=None, highlight=None,
-              score=True, sort=None, sort_order="asc", **params):
+    def query(self, q, fields=None, highlight=None, 
+              score=True, sort=None, sort_order="asc", 
+              wt='standard', **params):
         """
         q is the query string.
 
@@ -398,6 +399,8 @@ class SolrConnection:
 
         sort_order is the backward compatible way to add the same ordering
         to all the sort field when it is not specified.
+
+        wt is the "writer type" and tells solr how to format the response
 
         Optional parameters can also be passed in.  Many SOLR
         parameters are in a dotted notation (e.g., hl.simple.post).
@@ -453,7 +456,7 @@ class SolrConnection:
 
         params['fl'] = fields
         params['version'] = self.response_version
-        params['wt'] = 'standard'
+        params['wt'] = wt
 
         request = urllib.urlencode(params, doseq=True)
 
@@ -463,14 +466,20 @@ class SolrConnection:
         try:
             rsp = self._post(self.path + '/select',
                               request, self.form_headers)
-            # If we pass in rsp directly, instead of using rsp.read())
-            # and creating a StringIO, then Persistence breaks with
-            # an internal python error.
-            xml = StringIO(rsp.read())
-            if self.debug:
-                logging.info("solrpy got response: %s" % xml.getvalue())
-                
-            data = parse_query_response(xml,  params=params, connection=self)
+            if wt == 'python':
+                data = eval(rsp.read())
+            elif wt == 'json':
+                from simplejson import loads
+                data = loads(rsp.read())
+            else:
+                # If we pass in rsp directly, instead of using rsp.read())
+                # and creating a StringIO, then Persistence breaks with
+                # an internal python error.
+                xml = StringIO(rsp.read())
+                if self.debug:
+                    logging.info("solrpy got response: %s" % xml.getvalue())
+                    
+                data = parse_query_response(xml,  params=params, connection=self)
 
         finally:
             if not self.persistent:
